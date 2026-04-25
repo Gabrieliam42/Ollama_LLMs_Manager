@@ -1,8 +1,11 @@
 # Ollama LLMs Manager
 
 A user-friendly GUI application for managing Ollama language models on Windows. Easily download, manage, and organize your local LLM installations with a modern dark-themed interface.
+---
 
 ![Ollama LLMs Manager Screenshot](y04250329240592.png)
+
+---
 
 ## Features
 
