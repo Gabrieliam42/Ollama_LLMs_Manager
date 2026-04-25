@@ -1,6 +1,6 @@
 # Ollama LLMs Manager
 
-A user-friendly GUI application for managing Ollama language models on Windows. Easily download, manage, and organize your local LLM installations with a modern dark-themed interface.
+A user-friendly GUI application for managing Ollama LLMs on Windows. Easily download, manage, visualise, and organize your local LLM installations with a modern dark-themed interface.
 ---
 
 ![Ollama LLMs Manager Screenshot](Screenshot.png)
@@ -88,15 +88,9 @@ set OLLAMA_EXE=C:\Path\To\Your\ollama.exe
 4. Use the badge system to identify model features at a glance
 5. Download new models through the Ollama CLI or this manager
 
-## System Information
 
-This application is optimized for:
-- **GPU**: NVIDIA RTX 3090 (24GB VRAM)
-- **CPU**: Intel i9-14900KF
-- **RAM**: 128GB
-- **Runtime**: Windows 11
 
-However, it works on any Windows 10/11 system with Ollama installed.
+It works on any Windows 10/11 system with Ollama installed.
 
 ## Development
 
