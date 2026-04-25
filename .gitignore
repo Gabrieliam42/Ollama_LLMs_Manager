@@ -1,4 +1,3 @@
-# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -7,17 +6,14 @@ dist/
 build/
 .eggs/
 
-# Caches
 .cache/
 .ruff_cache/
 .pytest_cache/
 .mypy_cache/
 
-# IDE
 .vscode/
 .idea/
 
-# OS
 .DS_Store
 Thumbs.db
 
