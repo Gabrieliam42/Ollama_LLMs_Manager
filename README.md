@@ -31,8 +31,7 @@ A user-friendly GUI application for managing Ollama LLMs on Windows. Easily down
 ### Option 1: Executable (Recommended for Users)
 
 1. Download `Ollama_LLMs_Manager.exe` from [Releases](https://github.com/Gabrieliam42/Ollama_LLMs_Manager/releases)
-2. Run the executable directly - no installation required
-3. The application will automatically locate your Ollama installation
+2. The application will automatically locate your Ollama installation
 
 ### Option 2: Python Script (For Developers)
 
