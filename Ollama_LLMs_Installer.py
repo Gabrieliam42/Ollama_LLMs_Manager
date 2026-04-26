@@ -23,6 +23,9 @@ from bs4 import BeautifulSoup
 PREFERRED_MODELS = ()
 APP_NAME = "Ollama Library Models"
 LIBRARY_URL = "https://ollama.com/library"
+SEARCH_URL = "https://ollama.com/search"
+SEARCH_QUERIES = ("abliterated", "uncensored", "derestricted")
+MAX_SEARCH_PAGES = 100
 TEXT_OUTPUT_FILENAME = "Ollama_LLMs_Installer.txt"
 HTTP_TIMEOUT_SECONDS = 30
 MAX_FETCH_WORKERS = 8
@@ -360,84 +363,197 @@ def get_model_category_rank(model_entry):
     return len(ordered_categories)
 
 
-def parse_library_index_page():
-    soup = get_soup(LIBRARY_URL)
-    repo_container = soup.find("div", attrs={"x-test-repos": True}) or soup.find(id="repo")
-    if repo_container is None:
-        raise RuntimeError("Could not parse the Ollama library index page.")
+def extract_tag_name(model_name):
+    name_parts = model_name.split(":", maxsplit=1)
+    if len(name_parts) != 2:
+        return ""
+    return name_parts[1].strip()
 
-    preferred_order = {
-        model_name: index for index, model_name in enumerate(PREFERRED_MODELS)
+
+def is_allowed_quantization(tag_name):
+    quantization_match = re.search(r"(q\d+(?:_[a-z0-9]+)*)$", tag_name, re.I)
+    if quantization_match is None:
+        return True
+
+    quantization = quantization_match.group(1).upper()
+    if quantization.startswith(("Q1", "Q2", "Q3")):
+        return False
+    if quantization in {"Q4_K_S", "Q4_K_XS"}:
+        return False
+    if quantization.startswith("Q4"):
+        return quantization in {"Q4_K_M", "Q4_K_L"}
+    return True
+
+
+def variant_passes_tag_filter(variant):
+    tag_name = extract_tag_name(variant["name"])
+    if not tag_name:
+        return True
+
+    lowered_tag_name = tag_name.casefold()
+    if lowered_tag_name == "latest":
+        return True
+    if lowered_tag_name.startswith("cloud"):
+        return False
+
+    size_match = re.match(r"(\d+(?:\.\d+)?)b(?:$|[^a-z0-9])", lowered_tag_name)
+    if size_match is not None:
+        size_value = float(size_match.group(1))
+        if size_value < 7 or size_value > 80:
+            return False
+
+    return is_allowed_quantization(tag_name)
+
+
+def build_index_entry(
+    model_name,
+    model_url,
+    description,
+    badges,
+    sizes,
+    downloads,
+    tag_count,
+    updated,
+    preferred_order,
+):
+    model_entry = {
+        "name": model_name,
+        "model_url": model_url,
+        "tags_url": f"{model_url.rstrip('/')}/tags",
+        "description": description,
+        "badges": badges,
+        "sizes": sizes,
+        "downloads": downloads,
+        "tag_count": tag_count,
+        "updated": updated,
+        "preferred_index": preferred_order.get(model_name, len(preferred_order)),
     }
+    model_entry["display"] = build_model_display(model_entry)
+    return model_entry
+
+
+def parse_index_entries_from_soup(
+    soup, page_url, preferred_order, seen_names=None, allow_empty=False
+):
+    repo_container = soup.find("div", attrs={"x-test-repos": True}) or soup.find(id="repo")
+    item_nodes = (
+        repo_container.select("li[x-test-model]")
+        if repo_container is not None
+        else soup.select("li[x-test-model]")
+    )
+    if not item_nodes:
+        if allow_empty:
+            return []
+        raise RuntimeError(f"Could not parse the model listing page: {page_url}")
+
     model_entries = []
-    seen_names = set()
-    for item in repo_container.select("li[x-test-model]"):
-        title_element = item.find(attrs={"x-test-model-title": True})
-        if title_element is None:
+    if seen_names is None:
+        seen_names = set()
+
+    for item in item_nodes:
+        title_container = item.find(attrs={"x-test-model-title": True}) or item.find(
+            "div", title=True
+        )
+        title_element = title_container or item.find(
+            attrs={"x-test-search-response-title": True}
+        )
+        if title_element is None and title_container is None:
             continue
 
         model_name = clean_text(
-            title_element.get("title") or title_element.get_text(" ", strip=True)
+            (
+                title_container.get("title")
+                if title_container is not None
+                else None
+            )
+            or title_element.get_text(" ", strip=True)
         )
         if not model_name or model_name in seen_names:
             continue
 
         link_element = item.find("a", href=True)
         model_url = (
-            urljoin(f"{LIBRARY_URL}/", link_element["href"])
+            urljoin("https://ollama.com/", link_element["href"])
             if link_element is not None
-            else f"{LIBRARY_URL}/{model_name}"
+            else f"{page_url.rstrip('/')}/{model_name}"
         )
         chip_container = item.find(
             "div", class_=lambda value: class_list_contains(value, "flex", "flex-wrap")
         )
         badges, sizes = extract_badges_and_sizes(chip_container, model_name)
-        description_element = title_element.find_next("p")
+        description_element = (
+            title_container.find("p") if title_container is not None else None
+        )
         downloads_element = item.find(attrs={"x-test-pull-count": True})
         tags_element = item.find(attrs={"x-test-tag-count": True})
         updated_element = item.find(attrs={"x-test-updated": True})
 
-        model_entry = {
-            "name": model_name,
-            "model_url": model_url,
-            "tags_url": f"{model_url.rstrip('/')}/tags",
-            "description": clean_text(
+        model_entry = build_index_entry(
+            model_name=model_name,
+            model_url=model_url,
+            description=clean_text(
                 description_element.get_text(" ", strip=True)
                 if description_element is not None
                 else ""
             ),
-            "badges": badges,
-            "sizes": sizes,
-            "downloads": clean_text(
+            badges=badges,
+            sizes=sizes,
+            downloads=clean_text(
                 downloads_element.get_text(" ", strip=True)
                 if downloads_element is not None
                 else ""
             ),
-            "tag_count": parse_integer(
+            tag_count=parse_integer(
                 tags_element.get_text(" ", strip=True) if tags_element is not None else ""
             ),
-            "updated": clean_text(
+            updated=clean_text(
                 updated_element.get_text(" ", strip=True)
                 if updated_element is not None
                 else ""
             ),
-            "preferred_index": preferred_order.get(model_name, len(preferred_order)),
-        }
-        model_entry["display"] = build_model_display(model_entry)
+            preferred_order=preferred_order,
+        )
         model_entries.append(model_entry)
         seen_names.add(model_name)
 
+    return model_entries
+
+
+def parse_library_index_page(preferred_order, seen_names=None):
+    soup = get_soup(LIBRARY_URL)
+    model_entries = parse_index_entries_from_soup(
+        soup, LIBRARY_URL, preferred_order, seen_names=seen_names
+    )
     if not model_entries:
         raise RuntimeError("No Ollama library models were found.")
 
-    model_entries.sort(
-        key=lambda model: (
-            0 if model["name"] in preferred_order else 1,
-            model["preferred_index"],
-            model["name"].casefold(),
-        )
-    )
     return model_entries
+
+
+def parse_search_query_pages(query, preferred_order, seen_names=None):
+    search_entries = []
+    if seen_names is None:
+        seen_names = set()
+
+    for page_number in range(1, MAX_SEARCH_PAGES + 1):
+        if page_number == 1:
+            page_url = f"{SEARCH_URL}?q={query}"
+        else:
+            page_url = f"{SEARCH_URL}?page={page_number}&q={query}"
+
+        soup = get_soup(page_url)
+        page_entries = parse_index_entries_from_soup(
+            soup,
+            page_url,
+            preferred_order,
+            seen_names=seen_names,
+            allow_empty=True,
+        )
+        if not page_entries:
+            break
+        search_entries.extend(page_entries)
+
+    return search_entries
 
 
 def parse_model_detail_page(model_name, model_url):
@@ -669,23 +785,24 @@ def load_single_model(index_entry):
     return merge_model_data(index_entry, detail_entry, tags_entry, errors)
 
 
-def load_library_models(progress_callback=None):
-    if progress_callback is not None:
-        progress_callback("Loading Ollama library index...")
+def load_model_entries(model_entries, progress_callback=None, progress_label="models"):
+    model_count = len(model_entries)
+    if model_count == 0:
+        if progress_callback is not None:
+            progress_callback(f"No {progress_label} were found.")
+        return []
 
-    library_entries = parse_library_index_page()
-    model_count = len(library_entries)
     if progress_callback is not None:
         progress_callback(
-            f"Found {model_count} models on ollama.com. Fetching model and tags pages..."
+            f"Found {model_count} unique {progress_label} on ollama.com. Fetching model and tags pages..."
         )
 
     merged_models = []
     partial_models = 0
     with ThreadPoolExecutor(max_workers=MAX_FETCH_WORKERS) as executor:
         future_map = {
-            executor.submit(load_single_model, library_entry): library_entry
-            for library_entry in library_entries
+            executor.submit(load_single_model, index_entry): index_entry
+            for index_entry in model_entries
         }
         for completed_count, future in enumerate(as_completed(future_map), start=1):
             index_entry = future_map[future]
@@ -709,9 +826,7 @@ def load_library_models(progress_callback=None):
                     or completed_count == model_count
                     or completed_count % 5 == 0
                 ):
-                    status_message = (
-                        f"Loaded {completed_count}/{model_count} library models"
-                    )
+                    status_message = f"Loaded {completed_count}/{model_count} {progress_label}"
                     status_message += f" ({partial_models} partial)"
                     progress_callback(f"{status_message}...")
                 continue
@@ -725,15 +840,66 @@ def load_library_models(progress_callback=None):
                 or completed_count == model_count
                 or completed_count % 5 == 0
             ):
-                status_message = (
-                    f"Loaded {completed_count}/{model_count} library models"
-                )
+                status_message = f"Loaded {completed_count}/{model_count} {progress_label}"
                 if partial_models:
                     status_message += f" ({partial_models} partial)"
                 progress_callback(f"{status_message}...")
 
+    return merged_models
+
+
+def load_library_models(progress_callback=None):
+    preferred_order = {
+        model_name: index for index, model_name in enumerate(PREFERRED_MODELS)
+    }
+    seen_names = set()
+
+    if progress_callback is not None:
+        progress_callback("Loading Ollama library index...")
+
+    model_entries = parse_library_index_page(preferred_order, seen_names=seen_names)
+    if progress_callback is not None:
+        progress_callback(
+            f"Loaded {len(model_entries)} models from the Ollama library index."
+        )
+
+    merged_models = load_model_entries(
+        model_entries,
+        progress_callback=progress_callback,
+        progress_label="library models",
+    )
     merged_models = sort_models_by_category(merged_models)
     write_models_text(merged_models)
+    return merged_models
+
+
+def load_search_models(existing_names=None, progress_callback=None):
+    preferred_order = {
+        model_name: index for index, model_name in enumerate(PREFERRED_MODELS)
+    }
+    seen_names = set(existing_names or ())
+    model_entries = []
+
+    for query in SEARCH_QUERIES:
+        if progress_callback is not None:
+            progress_callback(f'Loading Ollama search results for "{query}"...')
+
+        query_entries = parse_search_query_pages(
+            query, preferred_order, seen_names=seen_names
+        )
+        model_entries.extend(query_entries)
+
+        if progress_callback is not None:
+            progress_callback(
+                f'Added {len(query_entries)} models from search query "{query}".'
+            )
+
+    merged_models = load_model_entries(
+        model_entries,
+        progress_callback=progress_callback,
+        progress_label="search models",
+    )
+    merged_models = sort_models_by_category(merged_models)
     return merged_models
 
 
@@ -767,6 +933,16 @@ def sort_models_by_category(model_entries):
         )
 
     return sorted(model_entries, key=category_key)
+
+
+def sort_model_entries(model_entries, sort_kind):
+    if sort_kind == "name":
+        return sort_models_by_name(model_entries)
+    if sort_kind == "downloads":
+        return sort_models_by_downloads(model_entries)
+    if sort_kind == "tags":
+        return sort_models_by_tag_count(model_entries)
+    return sort_models_by_category(model_entries)
 
 
 def write_models_text(model_entries):
@@ -910,11 +1086,15 @@ def show_models_window():
     selected_command_var = tk.StringVar(
         value='Select a tag to install it with: ollama run "<model:tag>" ""'
     )
+    all_models = []
     current_models = []
+    all_variants = []
     current_variants = []
     selected_model_index = [None]
     selected_variant_index = [None]
     interface_busy = [False]
+    filter_enabled = [False]
+    current_sort_kind = ["category"]
 
     def close(event=None):
         root.destroy()
@@ -1133,6 +1313,38 @@ def show_models_window():
     )
     refresh_button.pack(side="left")
 
+    main_library_button = tk.Button(
+        sort_button_frame,
+        text="Main Library",
+        command=lambda: refresh_models(),
+        bg=DARK_BUTTON,
+        fg=DARK_TEXT,
+        activebackground=DARK_BUTTON_ACTIVE,
+        activeforeground=DARK_TEXT,
+        relief="flat",
+        bd=0,
+        padx=14,
+        pady=6,
+        state="disabled",
+    )
+    main_library_button.pack(side="left", padx=(0, 8))
+
+    filter_button = tk.Button(
+        sort_button_frame,
+        text="Filter",
+        command=lambda: toggle_variant_filter(),
+        bg=DARK_BUTTON,
+        fg=DARK_TEXT,
+        activebackground=DARK_BUTTON_ACTIVE,
+        activeforeground=DARK_TEXT,
+        relief="flat",
+        bd=0,
+        padx=14,
+        pady=6,
+        state="disabled",
+    )
+    filter_button.pack(side="left", padx=(0, 8))
+
     sort_name_button = tk.Button(
         sort_button_frame,
         text="Sort by Name",
@@ -1148,22 +1360,6 @@ def show_models_window():
         state="disabled",
     )
     sort_name_button.pack(side="left", padx=(0, 8))
-
-    sort_downloads_button = tk.Button(
-        sort_button_frame,
-        text="Sort by Downloads",
-        command=lambda: sort_current_models("downloads"),
-        bg=DARK_BUTTON,
-        fg=DARK_TEXT,
-        activebackground=DARK_BUTTON_ACTIVE,
-        activeforeground=DARK_TEXT,
-        relief="flat",
-        bd=0,
-        padx=14,
-        pady=6,
-        state="disabled",
-    )
-    sort_downloads_button.pack(side="left")
 
     sort_tags_button = tk.Button(
         sort_button_frame,
@@ -1258,6 +1454,7 @@ def show_models_window():
         details_text.delete("1.0", "end")
 
     def clear_variant_list():
+        all_variants[:] = []
         current_variants[:] = []
         selected_variant_index[0] = None
         tags_title_var.set("Available Tags (0)")
@@ -1268,6 +1465,29 @@ def show_models_window():
         selected_command_var.set(
             'Select a tag to install it with: ollama run "<model:tag>" ""'
         )
+
+    def update_filter_button_state():
+        filter_button.config(
+            bg=DARK_BUTTON_ACTIVE if filter_enabled[0] else DARK_BUTTON,
+            activebackground=DARK_BUTTON_ACTIVE,
+        )
+
+    def apply_variant_filter(variants):
+        if not filter_enabled[0]:
+            return list(variants)
+        return [variant for variant in variants if variant_passes_tag_filter(variant)]
+
+    def model_passes_filter(model_entry):
+        if not filter_enabled[0]:
+            return True
+        if not model_entry["variants"]:
+            return True
+        return any(variant_passes_tag_filter(variant) for variant in model_entry["variants"])
+
+    def apply_model_filter(model_entries):
+        if not filter_enabled[0]:
+            return list(model_entries)
+        return [model_entry for model_entry in model_entries if model_passes_filter(model_entry)]
 
     def finish_model_text_update():
         set_model_text_state("disabled")
@@ -1349,22 +1569,59 @@ def show_models_window():
         update_selected_command_label()
         update_install_button_state()
 
-    def populate_variant_list(variants):
+    def populate_variant_list(variants, selected_variant_name=None):
         current_variants[:] = list(variants)
         selected_variant_index[0] = None
-        tags_title_var.set(f"Available Tags ({len(current_variants)})")
+        if filter_enabled[0]:
+            tags_title_var.set(
+                f"Available Tags ({len(current_variants)} of {len(all_variants)})"
+            )
+        else:
+            tags_title_var.set(f"Available Tags ({len(current_variants)})")
         tags_listbox.config(state="normal")
         tags_listbox.delete(0, "end")
 
         if current_variants:
             for variant in current_variants:
                 tags_listbox.insert("end", format_variant_entry(variant))
-            select_variant(0)
+            if selected_variant_name:
+                for index, variant in enumerate(current_variants):
+                    if variant["name"] == selected_variant_name:
+                        select_variant(index)
+                        break
+                else:
+                    select_variant(0)
+            else:
+                select_variant(0)
         else:
-            tags_listbox.insert("end", "No tag rows were parsed from the tags page.")
+            if all_variants and filter_enabled[0]:
+                tags_listbox.insert("end", "No tags match the current filter.")
+            else:
+                tags_listbox.insert("end", "No tag rows were parsed from the tags page.")
             tags_listbox.config(state="disabled")
             update_selected_command_label()
             update_install_button_state()
+
+    def refresh_variant_list(selected_variant_name=None):
+        filtered_variants = apply_variant_filter(all_variants)
+        populate_variant_list(filtered_variants, selected_variant_name=selected_variant_name)
+
+    def toggle_variant_filter():
+        if interface_busy[0] or not all_models:
+            return
+
+        selected_name = None
+        if selected_model_index[0] is not None and selected_model_index[0] < len(current_models):
+            selected_name = current_models[selected_model_index[0]]["name"]
+
+        filter_enabled[0] = not filter_enabled[0]
+        update_filter_button_state()
+        refresh_model_list(selected_name=selected_name)
+        message_var.set(
+            "Model and tag filter enabled."
+            if filter_enabled[0]
+            else "Model and tag filter disabled."
+        )
 
     def handle_variant_selection(event=None):
         if interface_busy[0]:
@@ -1424,7 +1681,8 @@ def show_models_window():
 
         finish_details_text_update()
         details_text.see("1.0")
-        populate_variant_list(model_entry["variants"])
+        all_variants[:] = list(model_entry["variants"])
+        refresh_variant_list()
 
     def select_model(index):
         model_text.tag_remove("selected", "1.0", "end")
@@ -1508,7 +1766,6 @@ def show_models_window():
     def populate_models(model_entries, selected_name=None):
         current_models[:] = model_entries
         selected_model_index[0] = None
-        message_var.set(f"{len(model_entries)} Ollama library model(s) found.")
         clear_model_text()
 
         for model_entry in model_entries:
@@ -1521,40 +1778,41 @@ def show_models_window():
         else:
             render_model_details(None)
 
+    def refresh_model_list(selected_name=None):
+        filtered_models = apply_model_filter(all_models)
+        populate_models(filtered_models, selected_name=selected_name)
+
+    def prepare_for_model_reload(list_message):
+        selected_model_index[0] = None
+        clear_model_text()
+        model_text.insert("end", list_message)
+        finish_model_text_update()
+        render_model_details(None)
+
     def sort_current_models(sort_kind):
-        if not current_models:
-            messagebox.showwarning(APP_NAME, "No library models are available to sort.")
+        if not all_models:
+            messagebox.showwarning(APP_NAME, "No models are available to sort.")
             return
 
         selected_name = None
-        if selected_model_index[0] is not None:
+        if selected_model_index[0] is not None and selected_model_index[0] < len(current_models):
             selected_name = current_models[selected_model_index[0]]["name"]
 
-        if sort_kind == "name":
-            sorted_models = sort_models_by_name(current_models)
-            sort_message = "sorted by name"
-        elif sort_kind == "downloads":
-            sorted_models = sort_models_by_downloads(current_models)
-            sort_message = "sorted by downloads"
-        elif sort_kind == "tags":
-            sorted_models = sort_models_by_tag_count(current_models)
-            sort_message = "sorted by tags"
-        else:
-            sorted_models = sort_models_by_category(current_models)
-            sort_message = "sorted by category"
-
-        populate_models(sorted_models, selected_name=selected_name)
+        current_sort_kind[0] = sort_kind
+        sorted_models = sort_model_entries(all_models, sort_kind)
+        sort_message = f"sorted by {sort_kind}"
+        all_models[:] = sorted_models
+        refresh_model_list(selected_name=selected_name)
         write_models_text(current_models)
-        message_var.set(
-            f"{len(current_models)} Ollama library model(s) found, {sort_message}."
-        )
+        message_var.set(f"{len(current_models)} model(s) shown, {sort_message}.")
 
     def apply_controls_state():
-        has_models = bool(current_models)
+        has_models = bool(all_models)
         refresh_button.config(state="disabled" if interface_busy[0] else "normal")
+        main_library_button.config(state="disabled" if interface_busy[0] else "normal")
         sort_state = "normal" if has_models and not interface_busy[0] else "disabled"
+        filter_button.config(state=sort_state)
         sort_name_button.config(state=sort_state)
-        sort_downloads_button.config(state=sort_state)
         sort_tags_button.config(state=sort_state)
         sort_category_button.config(state=sort_state)
         tags_listbox.config(
@@ -1562,6 +1820,7 @@ def show_models_window():
             if interface_busy[0] or not current_variants
             else "normal"
         )
+        update_filter_button_state()
         update_install_button_state()
 
     def set_busy(message):
@@ -1587,9 +1846,33 @@ def show_models_window():
             log_message(traceback.format_exc())
             result_queue.put(("error", str(exc)))
 
+    def scan_search_models():
+        try:
+            log_message(
+                "Starting Ollama abliterated, uncensored, and derestricted search scan."
+            )
+            model_entries = load_search_models(
+                progress_callback=lambda status: result_queue.put(("progress", status)),
+            )
+            log_message(f"Loaded {len(model_entries)} search model(s).")
+            result_queue.put(("search_models", model_entries))
+        except Exception as exc:
+            log_message(traceback.format_exc())
+            result_queue.put(("error", str(exc)))
+
     def refresh_models():
+        prepare_for_model_reload("Scanning Ollama library...")
         set_busy("Scanning Ollama library...")
         threading.Thread(target=scan_models, daemon=True).start()
+
+    def load_abliterated_models():
+        set_busy(
+            'Scanning "abliterated", "uncensored", and "derestricted" search results...'
+        )
+        threading.Thread(
+            target=scan_search_models,
+            daemon=True,
+        ).start()
 
     def install_selected_variant():
         selected_variant = get_selected_variant()
@@ -1628,10 +1911,17 @@ def show_models_window():
             if result_type == "progress":
                 message_var.set(payload)
             elif result_type == "models":
-                sorted_payload = sort_models_by_category(payload)
-                populate_models(sorted_payload)
+                sorted_payload = sort_model_entries(payload, current_sort_kind[0])
+                all_models[:] = sorted_payload
+                refresh_model_list()
+                write_models_text(all_models)
+                set_ready(f"{len(current_models)} model(s) found in the Ollama library.")
+            elif result_type == "search_models":
+                all_models[:] = sort_model_entries(payload, current_sort_kind[0])
+                refresh_model_list()
+                write_models_text(all_models)
                 set_ready(
-                    f"{len(sorted_payload)} Ollama library model(s) found."
+                    f'{len(current_models)} model(s) found in the "Abliterated" search set.'
                 )
             elif result_type == "installed":
                 set_ready(f"Installed {payload}.")
