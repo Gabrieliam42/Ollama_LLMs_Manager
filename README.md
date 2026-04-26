@@ -1,135 +1,138 @@
 # Ollama LLMs Manager
 
-A user-friendly GUI application for managing Ollama LLMs on Windows. Easily download, manage, visualise, and organize your local LLM installations with a modern dark-themed interface.
+Windows GUI tools for browsing, installing, and managing Ollama models.
+
 ---
 
 ![Ollama LLMs Manager Screenshot](Screenshot.png)
 
 ---
 
+## Overview
+
+This repository contains two desktop applications and their Python source files:
+
+- `Ollama_LLMs_Manager.exe` / `Ollama_LLMs_Manager.py`
+  - Manage models that are already installed in your local Ollama instance.
+  - View local models, inspect capability badges, sort them, and delete selected models.
+
+- `Ollama_LLMs_Installer.exe` / `Ollama_LLMs_Installer.py`
+  - Browse the Ollama online library from a Tk GUI.
+  - View model categories, open tag lists, and install a selected `model:tag` into your local Ollama setup.
+
 ## Features
 
-- **Model Management**: View, download, and manage Ollama language models
-- **Category Organization**: Models organized by capabilities (tools, thinking, vision, embedding, completion, audio, cloud)
-- **Badge System**: Visual indicators for model capabilities and features
-- **Dark Theme UI**: Modern dark Anthracite-themed interface for comfortable viewing
-- **Windows Integration**: Native Windows integration with dark title bar support
-- **Automatic Model Detection**: Intelligent detection of Ollama installation across common Windows locations
+- Browse local Ollama models with category badges
+- Browse remote models from `https://ollama.com/library`
+- View model tags and install a selected tag from the GUI
+- Category-aware sorting for model lists
+- Dark Anthracite-themed Windows UI
+- Automatic Ollama executable detection on Windows
 
 ## Supported Model Categories
 
-- **Tools**: Models with tool/function calling capabilities
-- **Thinking**: Reasoning and complex reasoning models
-- **Vision**: Models with image understanding capabilities
-- **Embedding**: Text embedding and semantic search models
-- **Completion**: Standard text completion models
-- **Audio**: Models with audio processing capabilities
-- **Cloud**: Cloud-integrated models
+- **Tools**
+- **Thinking**
+- **Vision**
+- **Embedding**
+- **Completion**
+- **Audio**
+- **Cloud**
+
+## Releases
+
+Download prebuilt executables from the [Releases](https://github.com/Gabrieliam42/Ollama_LLMs_Manager/releases) page:
+
+- `Ollama_LLMs_Manager.exe`
+- `Ollama_LLMs_Installer.exe`
 
 ## Installation
 
-### Option 1: Executable (Recommended for Users)
+### Option 1: Executables
 
-1. Download `Ollama_LLMs_Manager.exe` from [Releases](https://github.com/Gabrieliam42/Ollama_LLMs_Manager/releases)
-2. The application will automatically locate your Ollama installation
+1. Download `Ollama_LLMs_Manager.exe` and/or `Ollama_LLMs_Installer.exe` from [Releases](https://github.com/Gabrieliam42/Ollama_LLMs_Manager/releases).
+2. Install Ollama from [ollama.ai](https://ollama.ai) if it is not already installed.
+3. Run the executable you want to use.
 
-### Option 2: Python Script (For Developers)
+### Option 2: Python source
 
-1. Ensure you have Python 3.12+ installed
-2. Install Ollama from [ollama.ai](https://ollama.ai)
-3. Clone this repository:
-   ```bash
-   git clone https://github.com/Gabrieliam42/Ollama_LLMs_Manager.git
-   cd Ollama_LLMs_Manager
-   ```
+1. Ensure Python 3.12+ is installed.
+2. Install Ollama from [ollama.ai](https://ollama.ai).
+3. Clone the repository:
+
+```bash
+git clone https://github.com/Gabrieliam42/Ollama_LLMs_Manager.git
+cd Ollama_LLMs_Manager
+```
+
 4. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-5. Run the application:
-   ```bash
-   python Ollama_LLMs_Manager.py
-   ```
+
+```bash
+pip install -r requirements.txt
+```
+
+5. Run either application:
+
+```bash
+python Ollama_LLMs_Manager.py
+python Ollama_LLMs_Installer.py
+```
 
 ## Requirements
 
-- **Windows 10/11** (64-bit)
-- **Ollama** - Download from [ollama.ai](https://ollama.ai)
-- **Python 3.12+** (if running from source)
+- Windows 10/11
+- Ollama
+- Python 3.12+ when running from source
 
-## Configuration
+## Ollama Detection
 
-### Ollama Installation Detection
+Both applications search for `ollama.exe` in these locations:
 
-The application automatically searches for Ollama in these locations:
-
-1. `OLLAMA_EXE` environment variable (if set)
-2. Same directory as the application (`ollama.exe`)
-3. `Ollama` subdirectory
-4. Windows PATH
+1. `OLLAMA_EXE`
+2. The application directory
+3. An `Ollama` subdirectory next to the application
+4. Windows `PATH`
 5. `%LOCALAPPDATA%\Programs\Ollama`
 6. `%ProgramFiles%\Ollama`
 7. `%ProgramFiles(x86)%\Ollama`
 
-### Custom Ollama Location
-
-Set the `OLLAMA_EXE` environment variable to your Ollama executable path:
+To use a custom location:
 
 ```bash
 set OLLAMA_EXE=C:\Path\To\Your\ollama.exe
 ```
 
-## Usage
+## Files
 
-1. Launch the application
-2. View available Ollama models in the main interface
-3. Models are organized by category and capabilities
-4. Use the badge system to identify model features at a glance
-5. Download new models through the Ollama CLI or this manager
-
-
-
-It works on any Windows 10/11 system with Ollama installed.
+- `Ollama_LLMs_Manager.py` - Python source for the local model manager
+- `Ollama_LLMs_Manager.exe` - Prebuilt local model manager executable
+- `Ollama_LLMs_Installer.py` - Python source for the remote library browser / installer
+- `Ollama_LLMs_Installer.exe` - Prebuilt remote library browser / installer executable
+- `requirements.txt` - Python dependencies
 
 ## Development
 
-### Building from Source
-
-Requirements:
-- Python 3.12+
-- PyInstaller
-- Dependencies in `requirements.txt`
-
-Build the executable:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
-pyinstaller Ollama_LLMs_Manager.spec
 ```
 
-The executable will be generated in the `dist/` directory.
+Run Ruff:
 
-## Files
-
-- `Ollama_LLMs_Manager.py` - Main application source code
-- `Ollama_LLMs_Manager.exe` - Pre-built Windows executable
-- `Ollama_LLMs_Manager.spec` - PyInstaller build specification
-- `requirements.txt` - Python dependencies
+```bash
+ruff check .
+```
 
 ## Troubleshooting
 
-### "Could not locate ollama.exe"
+### Could not locate `ollama.exe`
 
-Make sure Ollama is installed and either:
-- Added to your Windows PATH
-- Set in the `OLLAMA_EXE` environment variable
-- Located in one of the default installation paths
+Make sure Ollama is installed and available through one of the detection paths listed above.
 
-### Dark Theme Not Applied
+### Dark theme not applied
 
-The dark theme is automatically applied on Windows 10/11. If it doesn't appear:
-- Try restarting the application
-- Ensure Windows 11 dark mode is enabled in Settings
+Restart the application and ensure you are running on Windows with normal desktop composition enabled.
 
 ## Author
 
@@ -139,12 +142,12 @@ The dark theme is automatically applied on Windows 10/11. If it doesn't appear:
 
 ## License
 
-This project is provided as-is for managing Ollama installations locally.
+This project is provided as-is.
 
 ## Support
 
-For issues, feature requests, or questions, please visit the [GitHub repository](https://github.com/Gabrieliam42/Ollama_LLMs_Manager) and open an issue.
+For issues or feature requests, use the [GitHub repository](https://github.com/Gabrieliam42/Ollama_LLMs_Manager).
 
 ---
 
-**Note**: This application requires Ollama to be installed separately. Visit [ollama.ai](https://ollama.ai) to download Ollama.
+**Note**: Ollama itself must be installed separately from [ollama.ai](https://ollama.ai).
