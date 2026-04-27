@@ -16,7 +16,7 @@ This repository contains two desktop applications and their Python source files:
   - Manage models that are already installed in your local Ollama instance.
   - View local models, inspect capability badges, sort them, and delete selected models.
 
-- `Ollama_LLMs_Installer.exe` / `Ollama_LLMs_Installer.py`
+- `Ollama_LLMs_Retriever.exe` / `Ollama_LLMs_Retriever.py`
   - Browse the Ollama online library from a Tk GUI.
   - View model categories, open tag lists, and install a selected `model:tag` into your local Ollama setup.
 
@@ -44,13 +44,13 @@ This repository contains two desktop applications and their Python source files:
 Download prebuilt executables from the [Releases](https://github.com/Gabrieliam42/Ollama_LLMs_Manager/releases) page:
 
 - `Ollama_LLMs_Manager.exe`
-- `Ollama_LLMs_Installer.exe`
+- `Ollama_LLMs_Retriever.exe`
 
 ## Installation
 
 ### Option 1: Executables
 
-1. Download `Ollama_LLMs_Manager.exe` and/or `Ollama_LLMs_Installer.exe` from [Releases](https://github.com/Gabrieliam42/Ollama_LLMs_Manager/releases).
+1. Download `Ollama_LLMs_Manager.exe` and/or `Ollama_LLMs_Retriever.exe` from [Releases](https://github.com/Gabrieliam42/Ollama_LLMs_Manager/releases).
 2. Install Ollama from [ollama.ai](https://ollama.ai) if it is not already installed.
 3. Run the executable you want to use.
 
@@ -75,7 +75,7 @@ pip install -r requirements.txt
 
 ```bash
 python Ollama_LLMs_Manager.py
-python Ollama_LLMs_Installer.py
+python Ollama_LLMs_Retriever.py
 ```
 
 ## Requirements
@@ -106,8 +106,8 @@ set OLLAMA_EXE=C:\Path\To\Your\ollama.exe
 
 - `Ollama_LLMs_Manager.py` - Python source for the local model manager
 - `Ollama_LLMs_Manager.exe` - Prebuilt local model manager executable
-- `Ollama_LLMs_Installer.py` - Python source for the remote library browser / installer
-- `Ollama_LLMs_Installer.exe` - Prebuilt remote library browser / installer executable
+- `Ollama_LLMs_Retriever.py` - Python source for the remote library browser / installer
+- `Ollama_LLMs_Retriever.exe` - Prebuilt remote library browser / installer executable
 - `requirements.txt` - Python dependencies
 
 ## Development
@@ -151,3 +151,4 @@ For issues or feature requests, use the [GitHub repository](https://github.com/G
 ---
 
 **Note**: Ollama itself must be installed separately from [ollama.ai](https://ollama.ai).
+

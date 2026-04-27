@@ -1329,6 +1329,22 @@ def show_models_window():
     )
     main_library_button.pack(side="left", padx=(0, 8))
 
+    abliterated_button = tk.Button(
+        sort_button_frame,
+        text="Abliterated",
+        command=lambda: load_abliterated_models(),
+        bg=DARK_BUTTON,
+        fg=DARK_TEXT,
+        activebackground=DARK_BUTTON_ACTIVE,
+        activeforeground=DARK_TEXT,
+        relief="flat",
+        bd=0,
+        padx=14,
+        pady=6,
+        state="disabled",
+    )
+    abliterated_button.pack(side="left", padx=(0, 8))
+
     filter_button = tk.Button(
         sort_button_frame,
         text="Filter",
@@ -1810,6 +1826,7 @@ def show_models_window():
         has_models = bool(all_models)
         refresh_button.config(state="disabled" if interface_busy[0] else "normal")
         main_library_button.config(state="disabled" if interface_busy[0] else "normal")
+        abliterated_button.config(state="disabled" if interface_busy[0] else "normal")
         sort_state = "normal" if has_models and not interface_busy[0] else "disabled"
         filter_button.config(state=sort_state)
         sort_name_button.config(state=sort_state)
