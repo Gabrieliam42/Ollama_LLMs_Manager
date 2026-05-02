@@ -1,6 +1,6 @@
 # Ollama Models Manager
 
-Windows GUI tools for browsing, installing, and managing Ollama models.
+Graphical User Interface tools for browsing, installing, and managing Ollama models on Windows.
 
 ---
 
